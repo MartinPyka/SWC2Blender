@@ -18,7 +18,6 @@ def read_some_data(context, filepath):
         
     ''' Create a dictionary with the first item '''
     data = lines[x].strip().split(' ')    
-    print(data)
     neuron = {float(data[0]): [float(data[1]), float(data[2]), float(data[3]), float(data[4]), float(data[5]), float(data[6])]}
     x += 1
         
