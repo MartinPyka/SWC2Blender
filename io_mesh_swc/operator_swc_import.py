@@ -1,5 +1,7 @@
 import bpy
-
+from bpy_extras.io_utils import ImportHelper
+from bpy.props import StringProperty, BoolProperty, EnumProperty
+from bpy.types import Operator
 
 def read_some_data(context, filepath):
     scale_f = 1000   # factor to downscale the data
@@ -87,14 +89,6 @@ def read_some_data(context, filepath):
 
     return {'FINISHED'}
 
-
-# ImportHelper is a helper class, defines filename and
-# invoke() function which calls the file selector.
-from bpy_extras.io_utils import ImportHelper
-from bpy.props import StringProperty, BoolProperty, EnumProperty
-from bpy.types import Operator
-
-
 class ImportSWCData(Operator, ImportHelper):
     """This appears in the tooltip of the operator and in the generated docs"""
     bl_idname = "import_mesh.swc"  # important since its how bpy.ops.import_test.some_data is constructed
@@ -129,6 +123,3 @@ def unregister():
 
 if __name__ == "__main__":
     register()
-
-    # test call
-    # bpy.ops.import_test.some_data('INVOKE_DEFAULT')
