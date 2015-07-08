@@ -28,7 +28,7 @@ def read_some_data(context, filepath):
         data = l.strip().split(' ')
         neuron[float(data[0])] = [float(data[1]), float(data[2]), float(data[3]), float(data[4]), float(data[5]), float(data[6])]
         
-    bpy.ops.object.empty_add(type='ARROWS', location=(neuron[1.][3] / scale_f, neuron[1.][2] / scale_f, neuron[1.][1] / scale_f), rotation=(0, 0, 0))
+    bpy.ops.object.empty_add(type='ARROWS', location=(neuron[1][1] / scale_f, neuron[1][2] / scale_f, neuron[1][3] / scale_f), rotation=(0, 0, 0))
     a = bpy.context.selected_objects[0]    
     a.name = 'neuron_swc'
 
@@ -61,7 +61,7 @@ def read_some_data(context, filepath):
             
             # move nodes to objects
             p = spline.bezier_points[0]
-            p.co = [neuron[value[-1]][3] / scale_f, neuron[value[-1]][2] / scale_f, neuron[value[-1]][1] / scale_f]
+            p.co = [neuron[value[-1]][1] / scale_f, neuron[value[-1]][2] / scale_f, neuron[value[-1]][3] / scale_f]
             p.radius = neuron[value[-1]][5] / scale_f
             p.handle_right_type='VECTOR'
             p.handle_left_type='VECTOR'
@@ -69,7 +69,7 @@ def read_some_data(context, filepath):
             if (last > 0):
                 spline.bezier_points.add(1)            
                 p = spline.bezier_points[-1]
-                p.co = [value[3]/scale_f, value[2]/scale_f, value[1]/scale_f]
+                p.co = [value[1]/scale_f, value[2]/scale_f, value[3]/scale_f]
                 p.radius = value[5] / scale_f
                 p.handle_right_type='VECTOR'
                 p.handle_left_type='VECTOR'
@@ -80,7 +80,7 @@ def read_some_data(context, filepath):
         if value[-1] == last:
             spline.bezier_points.add(1)
             p = spline.bezier_points[-1]
-            p.co = [value[3]/scale_f, value[2]/scale_f, value[1]/scale_f]
+            p.co = [value[1]/scale_f, value[2]/scale_f, value[3]/scale_f]
             p.radius = value[5] / scale_f
             p.handle_right_type='VECTOR'
             p.handle_left_type='VECTOR'
