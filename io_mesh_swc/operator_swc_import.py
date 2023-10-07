@@ -1,12 +1,20 @@
 import bpy
 from bpy_extras.io_utils import ImportHelper
-from bpy.props import StringProperty
+from bpy.props import StringProperty, FloatProperty
 from bpy.types import Operator
 
 
-def read_some_data(context, filepath):
-    scale_f = 1000  # factor to downscale the data
+def read_some_data(context, filepath, scale_f=1000):
+    """a function to read swc files and import them into blender
 
+    Args:
+        context (): _description_
+        filepath (str): filepath to SWC file
+        scale_f (int, optional): scale factor to downsample SWC into blender units. Defaults to 1000.
+
+    Returns:
+        set: with "FINISHED" if successful
+    """
     print(filepath)
     with open(filepath) as f:
         lines = f.readlines()
@@ -92,9 +100,12 @@ class ImportSWCData(Operator, ImportHelper):
     filename_ext = ".swc"
 
     filter_glob: StringProperty(default="*.swc", options={"HIDDEN"})
+    scale_factor: FloatProperty(
+        name="Scale Factor", default=1000.0, description="Factor to downscale the data"
+    )
 
     def execute(self, context):
-        return read_some_data(context, self.filepath)
+        return read_some_data(context, self.filepath, self.scale_factor)
 
 
 def menu_func_import(self, context):
