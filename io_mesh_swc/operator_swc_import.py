@@ -4,6 +4,37 @@ from bpy.props import StringProperty, FloatProperty
 from bpy.types import Operator
 
 
+def get_material_for_compartment(compartment_type):
+    material_names = {
+        1: "soma_material",
+        2: "axon_material",
+        3: "dendrite_material",
+        4: "apical_dendrite_material",
+        # Add more if needed...
+    }
+
+    mat_name = material_names.get(compartment_type, "default_material")
+
+    # If material doesn't exist, create it
+    if mat_name not in bpy.data.materials:
+        mat = bpy.data.materials.new(name=mat_name)
+
+        if mat_name == "soma_material":
+            mat.diffuse_color = (0.8, 0.2, 0.2, 1)  # Red for soma
+        elif mat_name == "axon_material":
+            mat.diffuse_color = (0.2, 0.8, 0.2, 1)  # Green for axon
+        elif mat_name == "dendrite_material":
+            mat.diffuse_color = (0.2, 0.2, 0.8, 1)  # Blue for dendrite
+        elif mat_name == "apical_dendrite_material":
+            mat.diffuse_color = (0.8, 0.8, 0.2, 1) # Yellow for apical dendrite
+        else:
+            mat.diffuse_color = (0.8, 0.8, 0.8, 1)  # Grey for others
+    else:
+        mat = bpy.data.materials[mat_name]
+
+    return mat
+
+
 def read_some_data(context, filepath, scale_f=1000):
     """a function to read swc files and import them into blender
 
@@ -25,7 +56,7 @@ def read_some_data(context, filepath, scale_f=1000):
 
     data = lines[x].strip().split(" ")
     neuron = {float(data[0]): [float(d) for d in data[1:7]]}
-    x += 1
+    # x += 1
 
     for l in lines[x:]:
         data = l.strip().split(" ")
@@ -44,7 +75,29 @@ def read_some_data(context, filepath, scale_f=1000):
     last = -10.0
 
     for key, value in neuron.items():
-        if value[-1] == -1 or value[0] == 10:
+
+        if value[0] == 1:  # This is typically the root node
+            # print(f"Adding sphere at root node location: {value[1:4]}")
+            # Adding sphere at the root node location with the specified radius
+            sphere_location = (
+                value[1] / scale_f,
+                value[2] / scale_f,
+                value[3] / scale_f,
+            )
+            soma_radius = value[4] / scale_f  # Assuming value[4] represents the radius
+            bpy.ops.mesh.primitive_uv_sphere_add(
+                radius=soma_radius, location=sphere_location
+            )
+            sphere = bpy.context.active_object
+            mat = get_material_for_compartment(value[0])
+            if len(sphere.data.materials) == 0:
+                sphere.data.materials.append(mat)
+            else:
+                sphere.data.materials[0] = mat
+            sphere.parent = a
+            continue
+
+        if value[0] == 10:
             continue
 
         if value[-1] != last:
@@ -58,7 +111,7 @@ def read_some_data(context, filepath, scale_f=1000):
             tracer.resolution_u = 8
             tracer.bevel_resolution = 8
             tracer.fill_mode = "FULL"
-            tracer.bevel_depth = 0.001
+            tracer.bevel_depth = 1.0 / scale_f
 
             p = spline.bezier_points[0]
             p.co = [
@@ -66,7 +119,7 @@ def read_some_data(context, filepath, scale_f=1000):
                 neuron[value[-1]][2] / scale_f,
                 neuron[value[-1]][3] / scale_f,
             ]
-            p.radius = neuron[value[-1]][5] / scale_f
+            p.radius = neuron[value[-1]][4]
             p.handle_right_type = "VECTOR"
             p.handle_left_type = "VECTOR"
 
@@ -74,17 +127,24 @@ def read_some_data(context, filepath, scale_f=1000):
                 spline.bezier_points.add(1)
                 p = spline.bezier_points[-1]
                 p.co = [value[1] / scale_f, value[2] / scale_f, value[3] / scale_f]
-                p.radius = value[5] / scale_f
+                p.radius = value[4]
                 p.handle_right_type = "VECTOR"
                 p.handle_left_type = "VECTOR"
 
             curve.parent = a
+            # Assign the material based on compartment type
+            compartment_type = value[0]  # The second column in SWC
+            mat = get_material_for_compartment(compartment_type)
+            if len(curve.data.materials) == 0:
+                curve.data.materials.append(mat)
+            else:
+                curve.data.materials[0] = mat
 
         if value[-1] == last:
             spline.bezier_points.add(1)
             p = spline.bezier_points[-1]
             p.co = [value[1] / scale_f, value[2] / scale_f, value[3] / scale_f]
-            p.radius = value[5] / scale_f
+            p.radius = value[4]
             p.handle_right_type = "VECTOR"
             p.handle_left_type = "VECTOR"
 
