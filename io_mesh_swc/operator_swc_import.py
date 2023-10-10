@@ -79,7 +79,7 @@ def read_some_data(
     last = -10.0
 
     for key, value in neuron.items():
-
+        print(key, value)
         if value[0] == 1:  # This is typically the root node
             # print(f"Adding sphere at root node location: {value[1:4]}")
             # Adding sphere at the root node location with the specified radius
@@ -105,6 +105,7 @@ def read_some_data(
             continue
 
         if value[-1] != last:
+
             tracer = bpy.data.curves.new("tracer", "CURVE")
             tracer.dimensions = "3D"
             spline = tracer.splines.new("BEZIER")
@@ -117,26 +118,37 @@ def read_some_data(
             tracer.fill_mode = "FULL"
             tracer.bevel_depth = radius_scale / scale_f
 
-            p = spline.bezier_points[0]
-            p.co = [
-                neuron[value[-1]][1] / scale_f,
-                neuron[value[-1]][2] / scale_f,
-                neuron[value[-1]][3] / scale_f,
-            ]
-            if neuron[value[-1]][0] ==1:
-                radius = neuron[value[-1]][4]/radius_scale
+            if value[-1] != -1:
+                p = spline.bezier_points[0]
+                p.co = [
+                    neuron[value[-1]][1] / scale_f,
+                    neuron[value[-1]][2] / scale_f,
+                    neuron[value[-1]][3] / scale_f,
+                ]
+                if neuron[value[-1]][0] == 1:
+                    radius = neuron[value[-1]][4] / radius_scale
+                else:
+                    radius = neuron[value[-1]][4]
+                p.radius = max(radius, min_radius)
+                p.handle_right_type = "VECTOR"
+                p.handle_left_type = "VECTOR"
             else:
-                radius = neuron[value[-1]][4]
-            p.radius = max(radius, min_radius)
-            p.handle_right_type = "VECTOR"
-            p.handle_left_type = "VECTOR"
-
+                p = spline.bezier_points[0]
+                p.co = [
+                    value[1] / scale_f,
+                    value[2] / scale_f,
+                    value[3] / scale_f,
+                ]
+                radius = value[4]
+                p.radius = max(radius, min_radius)
+                p.handle_right_type = "VECTOR"
+                p.handle_left_type = "VECTOR"
             if last > 0:
                 spline.bezier_points.add(1)
                 p = spline.bezier_points[-1]
                 p.co = [value[1] / scale_f, value[2] / scale_f, value[3] / scale_f]
-                if (value[0] == 1):
-                    radius = value[4]*radius_scale
+                if value[0] == 1:
+                    radius = value[4] * radius_scale
                 else:
                     radius = value[4]
                 p.radius = max(radius, min_radius)
@@ -242,12 +254,14 @@ class ImportSWCData(Operator, ImportHelper):
     )
 
     def execute(self, context):
-        return read_some_data(context,
-                              self.filepath,
-                              self.scale_factor,
-                              name="neuron_swc",
-                              min_radius=self.min_radius,
-                              radius_scale=self.radius_scale)
+        return read_some_data(
+            context,
+            self.filepath,
+            self.scale_factor,
+            name="neuron_swc",
+            min_radius=self.min_radius,
+            radius_scale=self.radius_scale,
+        )
 
 
 def menu_func_import(self, context):
