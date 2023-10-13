@@ -69,9 +69,7 @@ def read_some_data(
             continue
         data = l.strip().split()
         if len(data) < 7:
-            print(len(data))
             data = l.strip().split("\t")
-            print(len(data))
         neuron[float(data[0])] = [float(d) for d in data[1:7]]
 
     bpy.ops.object.empty_add(
