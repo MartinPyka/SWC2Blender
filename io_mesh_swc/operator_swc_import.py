@@ -58,12 +58,20 @@ def read_some_data(
     while lines[x][0] == "#":
         x += 1
 
-    data = lines[x].strip().split(" ")
+    data = lines[x].strip().split()
+    if len(data) < 7:
+        data = lines[x].strip().split("\t")
     neuron = {float(data[0]): [float(d) for d in data[1:7]]}
     # x += 1
 
     for l in lines[x:]:
-        data = l.strip().split(" ")
+        if l[0] == "#":
+            continue
+        data = l.strip().split()
+        if len(data) < 7:
+            print(len(data))
+            data = l.strip().split("\t")
+            print(len(data))
         neuron[float(data[0])] = [float(d) for d in data[1:7]]
 
     bpy.ops.object.empty_add(
@@ -79,7 +87,6 @@ def read_some_data(
     last = -10.0
 
     for key, value in neuron.items():
-        print(key, value)
         if value[0] == 1:  # This is typically the root node
             # print(f"Adding sphere at root node location: {value[1:4]}")
             # Adding sphere at the root node location with the specified radius
