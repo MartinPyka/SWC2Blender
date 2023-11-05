@@ -1,124 +1,289 @@
 import bpy
 from bpy_extras.io_utils import ImportHelper
-from bpy.props import StringProperty, BoolProperty, EnumProperty
+from bpy.props import StringProperty, FloatProperty
 from bpy.types import Operator
+import os
 
-def read_some_data(context, filepath):
-    scale_f = 1000   # factor to downscale the data
 
-    ''' read swc file '''
-    #neuron_file = '/home/martin/Programs/Lmv5.2_32bit/entho.CNG.swc'
-    print(filepath)
-    f = open(filepath)
-    lines = f.readlines()
-    f.close()
+def get_material_for_compartment(compartment_type):
+    material_names = {
+        1: "soma_material",
+        2: "axon_material",
+        3: "dendrite_material",
+        4: "apical_dendrite_material",
+        # Add more if needed...
+    }
 
-    ''' find starting point '''
+    mat_name = material_names.get(compartment_type, "default_material")
+
+    # If material doesn't exist, create it
+    if mat_name not in bpy.data.materials:
+        mat = bpy.data.materials.new(name=mat_name)
+
+        if mat_name == "soma_material":
+            mat.diffuse_color = (0.8, 0.2, 0.2, 1)  # Red for soma
+        elif mat_name == "axon_material":
+            mat.diffuse_color = (0.2, 0.8, 0.2, 1)  # Green for axon
+        elif mat_name == "dendrite_material":
+            mat.diffuse_color = (0.2, 0.2, 0.8, 1)  # Blue for dendrite
+        elif mat_name == "apical_dendrite_material":
+            mat.diffuse_color = (0.8, 0.8, 0.2, 1)  # Yellow for apical dendrite
+        else:
+            mat.diffuse_color = (0.8, 0.8, 0.8, 1)  # Grey for others
+    else:
+        mat = bpy.data.materials[mat_name]
+
+    return mat
+
+
+def read_some_data(
+    context, filepath, scale_f=1000, name="neuron_swc", min_radius=0.0, radius_scale=1.0
+):
+    """a function to read swc files and import them into blender
+
+    Args:
+        context (): _description_
+        filepath (str): filepath to SWC file
+        scale_f (int, optional): scale factor to downsample SWC into blender units. Defaults to 1000.
+        name (str, optional): name of the neuron object. Defaults to "neuron_swc".
+        min_radius (float, optional): minimum radius of the neuron. Defaults to 0.0.
+        radius_scale (float, optional): scale the radius of the non soma components by this amount in order to make thinner objects more visible at distance. Defaults to 1.0.
+    Returns:
+        set: with "FINISHED" if successful
+    """
+    with open(filepath) as f:
+        lines = f.readlines()
+
     x = 0
-    while lines[x][0] is '#':
+    while lines[x][0] == "#":
         x += 1
-        
-    ''' Create a dictionary with the first item '''
-    data = lines[x].strip().split(' ')    
-    neuron = {float(data[0]): [float(data[1]), float(data[2]), float(data[3]), float(data[4]), float(data[5]), float(data[6])]}
-    x += 1
-        
-    ''' Read the rest of the lines to the dictionary '''
+
+    data = lines[x].strip().split()
+    if len(data) < 7:
+        data = lines[x].strip().split("\t")
+    neuron = {float(data[0]): [float(d) for d in data[1:7]]}
+    # x += 1
+
     for l in lines[x:]:
-        data = l.strip().split(' ')
-        neuron[float(data[0])] = [float(data[1]), float(data[2]), float(data[3]), float(data[4]), float(data[5]), float(data[6])]
-        
-    bpy.ops.object.empty_add(type='ARROWS', location=(neuron[1][1] / scale_f, neuron[1][2] / scale_f, neuron[1][3] / scale_f), rotation=(0, 0, 0))
-    a = bpy.context.selected_objects[0]    
-    a.name = 'neuron_swc'
+        if l[0] == "#":
+            continue
+        data = l.strip().split()
+        if len(data) < 7:
+            data = l.strip().split("\t")
+        neuron[float(data[0])] = [float(d) for d in data[1:7]]
+
+    bpy.ops.object.empty_add(
+        location=(
+            neuron[1][1] / scale_f,
+            neuron[1][2] / scale_f,
+            neuron[1][3] / scale_f,
+        )
+    )
+    a = bpy.context.active_object
+    a.name = name
 
     last = -10.0
 
-    ''' Create object '''
     for key, value in neuron.items():
-        
-        if value[-1] == -1:
+        if value[0] == 1:  # This is typically the root node
+            # print(f"Adding sphere at root node location: {value[1:4]}")
+            # Adding sphere at the root node location with the specified radius
+            sphere_location = (
+                value[1] / scale_f,
+                value[2] / scale_f,
+                value[3] / scale_f,
+            )
+            soma_radius = value[4] / scale_f  # Assuming value[4] represents the radius
+            bpy.ops.mesh.primitive_uv_sphere_add(
+                radius=soma_radius, location=sphere_location
+            )
+            sphere = bpy.context.active_object
+            mat = get_material_for_compartment(value[0])
+            if len(sphere.data.materials) == 0:
+                sphere.data.materials.append(mat)
+            else:
+                sphere.data.materials[0] = mat
+            sphere.parent = a
             continue
-        
+
         if value[0] == 10:
             continue
 
-        # if we need to start a new bezier curve
-        if (value[-1] != last):
-             # trace the origins
-            tracer = bpy.data.curves.new('tracer','CURVE')
-            tracer.dimensions = '3D'
-            spline = tracer.splines.new('BEZIER')
+        if value[-1] != last:
 
-            curve = bpy.data.objects.new('curve',tracer)
-            bpy.context.scene.objects.link(curve)
-            
-            # render ready curve
+            tracer = bpy.data.curves.new("tracer", "CURVE")
+            tracer.dimensions = "3D"
+            spline = tracer.splines.new("BEZIER")
+
+            curve = bpy.data.objects.new("curve", tracer)
+            context.collection.objects.link(curve)
+
             tracer.resolution_u = 8
-            tracer.bevel_resolution = 8 # Set bevel resolution from Panel options
-            tracer.fill_mode = 'FULL'
-            tracer.bevel_depth = 0.001 # Set bevel depth from Panel options
-            
-            # move nodes to objects
-            p = spline.bezier_points[0]
-            p.co = [neuron[value[-1]][1] / scale_f, neuron[value[-1]][2] / scale_f, neuron[value[-1]][3] / scale_f]
-            p.radius = neuron[value[-1]][5] / scale_f
-            p.handle_right_type='VECTOR'
-            p.handle_left_type='VECTOR'
-            
-            if (last > 0):
-                spline.bezier_points.add(1)            
+            tracer.bevel_resolution = 8
+            tracer.fill_mode = "FULL"
+            tracer.bevel_depth = radius_scale / scale_f
+
+            if value[-1] != -1:
+                p = spline.bezier_points[0]
+                p.co = [
+                    neuron[value[-1]][1] / scale_f,
+                    neuron[value[-1]][2] / scale_f,
+                    neuron[value[-1]][3] / scale_f,
+                ]
+                if neuron[value[-1]][0] == 1:
+                    radius = neuron[value[-1]][4] / radius_scale
+                else:
+                    radius = neuron[value[-1]][4]
+                p.radius = max(radius, min_radius)
+                p.handle_right_type = "VECTOR"
+                p.handle_left_type = "VECTOR"
+            else:
+                p = spline.bezier_points[0]
+                p.co = [
+                    value[1] / scale_f,
+                    value[2] / scale_f,
+                    value[3] / scale_f,
+                ]
+                radius = value[4]
+                p.radius = max(radius, min_radius)
+                p.handle_right_type = "VECTOR"
+                p.handle_left_type = "VECTOR"
+            if last > 0:
+                spline.bezier_points.add(1)
                 p = spline.bezier_points[-1]
-                p.co = [value[1]/scale_f, value[2]/scale_f, value[3]/scale_f]
-                p.radius = value[5] / scale_f
-                p.handle_right_type='VECTOR'
-                p.handle_left_type='VECTOR'
+                p.co = [value[1] / scale_f, value[2] / scale_f, value[3] / scale_f]
+                if value[0] == 1:
+                    radius = value[4] * radius_scale
+                else:
+                    radius = value[4]
+                p.radius = max(radius, min_radius)
+                p.handle_right_type = "VECTOR"
+                p.handle_left_type = "VECTOR"
 
             curve.parent = a
-        
-        # if we can continue the last bezier curve
+            # Assign the material based on compartment type
+            compartment_type = value[0]  # The second column in SWC
+            mat = get_material_for_compartment(compartment_type)
+            if len(curve.data.materials) == 0:
+                curve.data.materials.append(mat)
+            else:
+                curve.data.materials[0] = mat
+
         if value[-1] == last:
             spline.bezier_points.add(1)
             p = spline.bezier_points[-1]
-            p.co = [value[1]/scale_f, value[2]/scale_f, value[3]/scale_f]
-            p.radius = value[5] / scale_f
-            p.handle_right_type='VECTOR'
-            p.handle_left_type='VECTOR'
-        
+            p.co = [value[1] / scale_f, value[2] / scale_f, value[3] / scale_f]
+            p.radius = max(value[4], min_radius)
+            p.handle_right_type = "VECTOR"
+            p.handle_left_type = "VECTOR"
+
         last = key
 
-    return {'FINISHED'}
+    return {"FINISHED"}
 
-class ImportSWCData(Operator, ImportHelper):
-    """This appears in the tooltip of the operator and in the generated docs"""
-    bl_idname = "import_mesh.swc"  # important since its how bpy.ops.import_test.some_data is constructed
-    bl_label = "Import SWC-Files"
 
-    # ImportHelper mixin class uses this
-    filename_ext = ".swc"
+def import_all_swcs_from_directory(
+    context, directory, scale_f=1000.0, min_radius=0.0, radius_scale=1.0
+):
+    # Check if the directory exists
+    if not os.path.exists(directory):
+        print(f"Directory '{directory}' does not exist!")
+        return
 
-    filter_glob = StringProperty(
-            default="*.swc",
-            options={'HIDDEN'},
+    # Iterate over all files in the directory
+    for filename in os.listdir(directory):
+        # Check if the file has an .swc extension
+        if filename.endswith(".swc"):
+            filepath = os.path.join(directory, filename)
+            neuron_name = os.path.splitext(filename)[
+                0
+            ]  # Extract name without extension
+            read_some_data(
+                context, filepath, scale_f, neuron_name, min_radius, radius_scale
             )
 
+
+class ImportSWCdirectory(Operator, ImportHelper):
+    bl_idname = "import_mesh.swc_dir"
+    bl_label = "Import SWC-Files from directory"
+
+    directory: StringProperty(
+        name="Directory",
+        description="Directory to import from",
+        subtype="DIR_PATH",
+    )
+    scale_factor: FloatProperty(
+        name="Scale Factor", default=1000.0, description="Factor to downscale the data"
+    )
+    min_radius: FloatProperty(
+        name="Minimum Radius",
+        default=0.0,
+        description="Will ensure no portion of the object has a radius less than this (before scaling). Make >0 to help make thin axon more visible.",
+    )
+    radius_scale: FloatProperty(
+        name="Radius Scale",
+        default=1.0,
+        description="Scale the radius of the non soma components by this amount in order to make thinner objects more visible at distance.",
+    )
+
     def execute(self, context):
-        return read_some_data(context, self.filepath)
+        import_all_swcs_from_directory(
+            context,
+            self.directory,
+            self.scale_factor,
+            self.min_radius,
+            self.radius_scale,
+        )
+        return {"FINISHED"}
 
 
-# Only needed if you want to add into a dynamic menu
+class ImportSWCData(Operator, ImportHelper):
+    bl_idname = "import_mesh.swc"
+    bl_label = "Import SWC-Files"
+
+    filename_ext = ".swc"
+
+    filter_glob: StringProperty(default="*.swc", options={"HIDDEN"})
+    scale_factor: FloatProperty(
+        name="Scale Factor", default=1000.0, description="Factor to downscale the data"
+    )
+    min_radius: FloatProperty(
+        name="Minimum Radius",
+        default=0.0,
+        description="Will ensure no portion of the object has a radius less than this (before scaling). Make >0 to help make thin axon more visible.",
+    )
+    radius_scale: FloatProperty(
+        name="Radius Scale",
+        default=1.0,
+        description="Scale the radius of the non soma components by this amount in order to make thinner objects more visible at distance.",
+    )
+
+    def execute(self, context):
+        return read_some_data(
+            context,
+            self.filepath,
+            self.scale_factor,
+            name="neuron_swc",
+            min_radius=self.min_radius,
+            radius_scale=self.radius_scale,
+        )
+
+
 def menu_func_import(self, context):
     self.layout.operator(ImportSWCData.bl_idname, text="SWC Importer")
+    self.layout.operator(ImportSWCdirectory.bl_idname, text="SWC Directory Importer")
 
 
 def register():
     bpy.utils.register_class(ImportSWCData)
-    bpy.types.INFO_MT_file_import.append(menu_func_import)
+    bpy.utils.register_class(ImportSWCdirectory)
+    bpy.types.TOPBAR_MT_file_import.append(menu_func_import)
 
 
 def unregister():
     bpy.utils.unregister_class(ImportSWCData)
-    bpy.types.INFO_MT_file_import.remove(menu_func_import)
+    bpy.utils.unregister_class(ImportSWCdirectory)
+    bpy.types.TOPBAR_MT_file_import.remove(menu_func_import)
 
 
 if __name__ == "__main__":
